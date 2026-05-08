@@ -197,6 +197,42 @@ body {
   box-shadow: 0 0 12px rgba(0, 212, 170, 0.4);
 }
 
+/* Reload / re-upload button */
+.btn-reload {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition), border-color var(--transition), transform 0.4s ease;
+  z-index: 2;
+}
+
+.btn-reload svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-reload:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  transform: rotate(-180deg);
+}
+
+.btn-reload.hidden {
+  display: none;
+}
+
 .step-card h2 {
   font-size: 1.1rem;
   font-weight: 700;
@@ -267,6 +303,46 @@ body {
 
 .file-info.error {
   color: var(--danger);
+}
+
+/* Drop zone loading state */
+.drop-zone.loading {
+  pointer-events: none;
+  border-color: var(--accent);
+  position: relative;
+}
+
+.drop-zone.loading .drop-zone-content {
+  opacity: 0.15;
+}
+
+.drop-zone.loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border: 3px solid rgba(108, 99, 255, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.drop-zone.loading .file-info {
+  text-align: center;
+  color: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 /* ===== Results Section ===== */
