@@ -1,7 +1,3 @@
-/* ======================================================================
-   Code Extractor – Frontend-only Material Code Mapper
-   Uses Papa Parse (CSV) + SheetJS (Excel) — no server required.
-   ====================================================================== */
 
 // ——— State ———
 let lookupMap = null;   // Map<"matCode|shadeCode", newMatCode>
@@ -9,22 +5,24 @@ let resultRows = null;  // Array of row objects after merge
 let resultCols = null;  // Column headers from the Excel file + New Material Code
 
 // ——— DOM refs ———
-const csvInput      = document.getElementById("csv-input");
-const excelInput    = document.getElementById("excel-input");
-const csvDropZone   = document.getElementById("csv-drop-zone");
+const csvInput = document.getElementById("csv-input");
+const excelInput = document.getElementById("excel-input");
+const csvDropZone = document.getElementById("csv-drop-zone");
 const excelDropZone = document.getElementById("excel-drop-zone");
-const csvFileInfo   = document.getElementById("csv-file-info");
+const csvFileInfo = document.getElementById("csv-file-info");
 const excelFileInfo = document.getElementById("excel-file-info");
-const step1Card     = document.getElementById("step1-card");
-const step2Card     = document.getElementById("step2-card");
+const step1Card = document.getElementById("step1-card");
+const step2Card = document.getElementById("step2-card");
 const resultsSection = document.getElementById("results-section");
-const statsRow      = document.getElementById("stats-row");
-const tableWrapper  = document.getElementById("table-wrapper");
-const btnDownload   = document.getElementById("btn-download");
-const btnCopy       = document.getElementById("btn-copy");
-const copyLabel     = document.getElementById("copy-label");
-const btnCopyCodes  = document.getElementById("btn-copy-codes");
+const statsRow = document.getElementById("stats-row");
+const tableWrapper = document.getElementById("table-wrapper");
+const btnDownload = document.getElementById("btn-download");
+const btnCopy = document.getElementById("btn-copy");
+const copyLabel = document.getElementById("copy-label");
+const btnCopyCodes = document.getElementById("btn-copy-codes");
 const copyCodesLabel = document.getElementById("copy-codes-label");
+const btnReload1 = document.getElementById("btn-reload-1");
+const btnReload2 = document.getElementById("btn-reload-2");
 
 // ——— Toast helper ———
 function toast(msg, type = "info", durationMs = 3500) {
@@ -66,8 +64,9 @@ csvInput.addEventListener("change", () => {
   const file = csvInput.files[0];
   if (!file) return;
 
-  csvFileInfo.textContent = "";
+  csvFileInfo.textContent = "Processing…";
   csvFileInfo.classList.remove("error");
+  csvDropZone.classList.add("loading");
 
   const ext = file.name.split(".").pop().toLowerCase();
 
@@ -77,11 +76,13 @@ csvInput.addEventListener("change", () => {
       header: true,
       skipEmptyLines: true,
       complete(results) {
+        csvDropZone.classList.remove("loading");
         const rows = results.data;
         const cols = results.meta.fields.map(f => f.trim());
         buildLookup(file, rows, cols);
       },
       error(err) {
+        csvDropZone.classList.remove("loading");
         csvFileInfo.textContent = `Parse error: ${err.message}`;
         csvFileInfo.classList.add("error");
         toast("Failed to parse file", "error");
@@ -95,10 +96,12 @@ csvInput.addEventListener("change", () => {
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: "array" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
         const cols = rows.length ? Object.keys(rows[0]).map(c => c.trim()) : [];
+        csvDropZone.classList.remove("loading");
         buildLookup(file, rows, cols);
       } catch (err) {
+        csvDropZone.classList.remove("loading");
         csvFileInfo.textContent = `Parse error: ${err.message}`;
         csvFileInfo.classList.add("error");
         toast("Failed to parse file", "error");
@@ -124,9 +127,9 @@ function buildLookup(file, rows, cols) {
 
   lookupMap = new Map();
   for (const row of rows) {
-    const mat   = String(row["Old Material Code"] || "").trim();
-    const shade = String(row["Old Shade Code"] || "").trim();
-    const newMat = String(row["New Material Code"] || "").trim();
+    const mat = String(row["Old Material Code"] ?? "").trim();
+    const shade = String(row["Old Shade Code"] ?? "").trim();
+    const newMat = String(row["New Material Code"] ?? "").trim();
     if (mat && shade) {
       lookupMap.set(`${mat}|${shade}`, newMat);
     }
@@ -134,6 +137,7 @@ function buildLookup(file, rows, cols) {
 
   csvFileInfo.textContent = `✓ ${file.name}  —  ${lookupMap.size} entries loaded`;
   step1Card.classList.add("done");
+  btnReload1.classList.remove("hidden");
   toast(`Loaded ${lookupMap.size} lookup entries`, "success");
 
   // Enable step 2
@@ -146,8 +150,9 @@ excelInput.addEventListener("change", () => {
   const file = excelInput.files[0];
   if (!file || !lookupMap) return;
 
-  excelFileInfo.textContent = "";
+  excelFileInfo.textContent = "Processing…";
   excelFileInfo.classList.remove("error");
+  excelDropZone.classList.add("loading");
 
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -156,9 +161,10 @@ excelInput.addEventListener("change", () => {
       const workbook = XLSX.read(data, { type: "array" });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
 
       if (rows.length === 0) {
+        excelDropZone.classList.remove("loading");
         excelFileInfo.textContent = "Excel file is empty";
         excelFileInfo.classList.add("error");
         toast("Excel file contains no data", "error");
@@ -173,6 +179,7 @@ excelInput.addEventListener("change", () => {
       const required = ["Old Material Code", "Old Shade Code"];
       const missing = required.filter(c => !(c in colMap));
       if (missing.length) {
+        excelDropZone.classList.remove("loading");
         excelFileInfo.textContent = `Missing columns: ${missing.join(", ")}`;
         excelFileInfo.classList.add("error");
         toast("Excel is missing required columns", "error");
@@ -182,10 +189,10 @@ excelInput.addEventListener("change", () => {
       // Merge
       let matched = 0;
       for (const row of rows) {
-        const mat   = String(row[colMap["Old Material Code"]] || "").trim();
-        const shade = String(row[colMap["Old Shade Code"]] || "").trim();
-        const key   = `${mat}|${shade}`;
-        const newMat = lookupMap.get(key) || "";
+        const mat = String(row[colMap["Old Material Code"]] ?? "").trim();
+        const shade = String(row[colMap["Old Shade Code"]] ?? "").trim();
+        const key = `${mat}|${shade}`;
+        const newMat = lookupMap.get(key) ?? "";
         row["New Material Code"] = newMat;
         if (newMat) matched++;
       }
@@ -193,8 +200,10 @@ excelInput.addEventListener("change", () => {
       const total = rows.length;
       const unmatched = total - matched;
 
+      excelDropZone.classList.remove("loading");
       excelFileInfo.textContent = `✓ ${file.name}  —  ${total} rows processed`;
       step2Card.classList.add("done");
+      btnReload2.classList.remove("hidden");
       toast(`Matched ${matched} / ${total} rows`, matched === total ? "success" : "info");
 
       // Determine display columns — preserve original order, add New Material Code at end if not present
@@ -206,6 +215,7 @@ excelInput.addEventListener("change", () => {
 
       renderResults(total, matched, unmatched);
     } catch (err) {
+      excelDropZone.classList.remove("loading");
       excelFileInfo.textContent = `Error: ${err.message}`;
       excelFileInfo.classList.add("error");
       toast("Failed to read Excel file", "error");
@@ -324,4 +334,49 @@ btnCopyCodes.addEventListener("click", async () => {
   } catch {
     toast("Copy failed — try again", "error");
   }
+});
+
+// ——— Reload / re-upload handlers ———
+
+/** Reset step 2 and results (keeps lookup intact) */
+function resetStep2() {
+  excelInput.value = "";
+  excelFileInfo.textContent = "";
+  excelFileInfo.classList.remove("error");
+  step2Card.classList.remove("done");
+  btnReload2.classList.add("hidden");
+  resultsSection.classList.add("hidden");
+  resultRows = null;
+  resultCols = null;
+  statsRow.innerHTML = "";
+  tableWrapper.innerHTML = "";
+}
+
+/** Reset step 1 (cascades to step 2) */
+function resetStep1() {
+  resetStep2();
+  csvInput.value = "";
+  csvFileInfo.textContent = "";
+  csvFileInfo.classList.remove("error");
+  step1Card.classList.remove("done");
+  btnReload1.classList.add("hidden");
+  step2Card.classList.add("disabled");
+  excelInput.disabled = true;
+  lookupMap = null;
+}
+
+btnReload1.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  resetStep1();
+  // Trigger file picker immediately
+  csvInput.click();
+});
+
+btnReload2.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  resetStep2();
+  // Trigger file picker immediately
+  excelInput.click();
 });
