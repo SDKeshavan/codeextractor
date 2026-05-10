@@ -24,6 +24,19 @@ const copyCodesLabel = document.getElementById("copy-codes-label");
 const btnReload1 = document.getElementById("btn-reload-1");
 const btnReload2 = document.getElementById("btn-reload-2");
 
+// Mode toggle & single lookup refs
+const modeBulkBtn = document.getElementById("mode-bulk");
+const modeSingleBtn = document.getElementById("mode-single");
+const panelBulk = document.getElementById("panel-bulk");
+const panelSingle = document.getElementById("panel-single");
+const inputMatCode = document.getElementById("input-mat-code");
+const inputShadeCode = document.getElementById("input-shade-code");
+const btnLookup = document.getElementById("btn-lookup");
+const singleResult = document.getElementById("single-result");
+const singleResultValue = document.getElementById("single-result-value");
+const btnCopySingle = document.getElementById("btn-copy-single");
+const copySingleLabel = document.getElementById("copy-single-label");
+
 // ——— Toast helper ———
 function toast(msg, type = "info", durationMs = 3500) {
   const el = document.createElement("div");
@@ -143,6 +156,7 @@ function buildLookup(file, rows, cols) {
   // Enable step 2
   step2Card.classList.remove("disabled");
   excelInput.disabled = false;
+  btnLookup.disabled = false;
 }
 
 // ——— Step 2: Parse Excel & merge ———
@@ -310,7 +324,7 @@ btnCopy.addEventListener("click", async () => {
       copyLabel.textContent = "Copy Table";
       btnCopy.classList.remove("copied");
     }, 2000);
-  } catch {
+  } catch (e) {
     toast("Copy failed — try again", "error");
   }
 });
@@ -331,7 +345,7 @@ btnCopyCodes.addEventListener("click", async () => {
       copyCodesLabel.textContent = "Copy New Codes";
       btnCopyCodes.classList.remove("copied");
     }, 2000);
-  } catch {
+  } catch (e) {
     toast("Copy failed — try again", "error");
   }
 });
@@ -350,6 +364,11 @@ function resetStep2() {
   resultCols = null;
   statsRow.innerHTML = "";
   tableWrapper.innerHTML = "";
+  // Reset single mode
+  inputMatCode.value = "";
+  inputShadeCode.value = "";
+  singleResult.classList.add("hidden");
+  singleResult.classList.remove("not-found");
 }
 
 /** Reset step 1 (cascades to step 2) */
@@ -362,6 +381,7 @@ function resetStep1() {
   btnReload1.classList.add("hidden");
   step2Card.classList.add("disabled");
   excelInput.disabled = true;
+  btnLookup.disabled = true;
   lookupMap = null;
 }
 
@@ -378,5 +398,90 @@ btnReload2.addEventListener("click", (e) => {
   e.stopPropagation();
   resetStep2();
   // Trigger file picker immediately
-  excelInput.click();
+  if (!panelBulk.classList.contains("hidden")) {
+    excelInput.click();
+  } else {
+    inputMatCode.focus();
+  }
+});
+
+// ——— Mode toggle ———
+function setMode(mode) {
+  if (mode === "bulk") {
+    modeBulkBtn.classList.add("active");
+    modeSingleBtn.classList.remove("active");
+    panelBulk.classList.remove("hidden");
+    panelSingle.classList.add("hidden");
+  } else {
+    modeSingleBtn.classList.add("active");
+    modeBulkBtn.classList.remove("active");
+    panelSingle.classList.remove("hidden");
+    panelBulk.classList.add("hidden");
+  }
+  // Hide bulk results when switching to single
+  if (mode === "single") {
+    resultsSection.classList.add("hidden");
+  }
+}
+
+modeBulkBtn.addEventListener("click", () => setMode("bulk"));
+modeSingleBtn.addEventListener("click", () => setMode("single"));
+
+// ——— Single lookup ———
+function doSingleLookup() {
+  if (!lookupMap) return;
+
+  const mat = inputMatCode.value.trim();
+  const shade = inputShadeCode.value.trim();
+
+  if (!mat || !shade) {
+    toast("Enter both codes", "error");
+    return;
+  }
+
+  const key = `${mat}|${shade}`;
+  const result = lookupMap.get(key);
+
+  singleResult.classList.remove("hidden", "not-found");
+
+  if (result !== undefined && result !== "") {
+    singleResultValue.textContent = result;
+    btnCopySingle.style.display = "";
+    toast("Match found!", "success");
+  } else {
+    singleResultValue.textContent = "No match found";
+    singleResult.classList.add("not-found");
+    btnCopySingle.style.display = "none";
+    toast("No matching entry in lookup", "error");
+  }
+}
+
+btnLookup.addEventListener("click", doSingleLookup);
+
+// Allow Enter key to trigger lookup
+[inputMatCode, inputShadeCode].forEach(input => {
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      doSingleLookup();
+    }
+  });
+});
+
+// Copy single result
+btnCopySingle.addEventListener("click", async () => {
+  const val = singleResultValue.textContent;
+  if (!val) return;
+  try {
+    await navigator.clipboard.writeText(val);
+    copySingleLabel.textContent = "Copied!";
+    btnCopySingle.classList.add("copied");
+    toast("Copied to clipboard", "success");
+    setTimeout(() => {
+      copySingleLabel.textContent = "Copy";
+      btnCopySingle.classList.remove("copied");
+    }, 2000);
+  } catch (e) {
+    toast("Copy failed", "error");
+  }
 });
